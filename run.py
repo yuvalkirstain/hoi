@@ -33,6 +33,7 @@ class Runner:
 
         # Set up config
         self.config = util.initialize_config(config_name)
+        self.amp = self.config['amp']
 
         # Set up logger
         log_path = join(self.config['log_dir'], 'log_' + self.name_suffix + '.txt')
