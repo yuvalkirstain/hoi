@@ -1,6 +1,8 @@
 import logging
 import os
 import random
+
+import neptune
 import numpy as np
 import torch
 from torch.cuda.amp import autocast, GradScaler
@@ -73,6 +75,11 @@ class Runner:
         tb_path = join(conf['tb_dir'], self.name + '_' + self.name_suffix)
         tb_writer = SummaryWriter(tb_path, flush_secs=30)
         logger.info('Tensorboard summary path: %s' % tb_path)
+
+        # Set up neptune
+        neptune.init(project_qualified_name="yuvalkirstain/coref",
+                     api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vdWkubmVwdHVuZS5haSIsImFwaV91cmwiOiJodHRwczovL3VpLm5lcHR1bmUuYWkiLCJhcGlfa2V5IjoiZGFkOTAxNmQtMGU1Mi00OTQ5LWE5Y2YtYTQ0ZWVkOTM1NzAzIn0=")
+        neptune.create_experiment(name=self.name, params={k: v for k, v in conf.items()})
 
         # Set up data
         examples_train, examples_dev, examples_test = self.data.get_tensor_examples()
@@ -161,6 +168,10 @@ class Runner:
                                     (len(loss_history), avg_loss, conf['report_frequency'] / (end_time - start_time)))
                         start_time = end_time
 
+                        neptune.log_metric("Training_Loss", x=len(loss_history), y=avg_loss)
+                        neptune.log_metric("Learning_Rate_Bert", x=len(loss_history), y=schedulers[0].get_last_lr()[0])
+                        neptune.log_metric("Learning_Rate_Task", x=len(loss_history), y=schedulers[1].get_last_lr()[-1])
+
                         tb_writer.add_scalar('Training_Loss', avg_loss, len(loss_history))
                         tb_writer.add_scalar('Learning_Rate_Bert', schedulers[0].get_last_lr()[0], len(loss_history))
                         tb_writer.add_scalar('Learning_Rate_Task', schedulers[1].get_last_lr()[-1], len(loss_history))
@@ -203,6 +214,7 @@ class Runner:
         metrics = {'Eval_Avg_Precision': p * 100, 'Eval_Avg_Recall': r * 100, 'Eval_Avg_F1': f * 100}
         for name, score in metrics.items():
             logger.info('%s: %.2f' % (name, score))
+            neptune.log_metric("name", x=step, y=score)
             if tb_writer:
                 tb_writer.add_scalar(name, score, step)
 
