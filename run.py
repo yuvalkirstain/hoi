@@ -96,7 +96,8 @@ class Runner:
         max_f1 = 0
         start_time = time.time()
         model.zero_grad()
-        scaler = torch.cuda.amp.GradScaler()
+        if self.amp:
+            scaler = torch.cuda.amp.GradScaler()
         for epo in tqdm(range(epochs)):
             random.shuffle(examples_train)  # Shuffle training set
             for doc_key, example in tqdm(examples_train):
@@ -133,9 +134,10 @@ class Runner:
                             scaler.step(optimizer)
                         else:
                             optimizer.step()
-                    scaler.update()
-                    for optimizer in optimizers:
-                        optimizer.zero_grad()
+                    if self.amp:
+                        scaler.update()
+                        for optimizer in optimizers:
+                            optimizer.zero_grad()
                     model.zero_grad()
                     for scheduler in schedulers:
                         scheduler.step()
