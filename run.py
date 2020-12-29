@@ -2,7 +2,9 @@ import logging
 import random
 import numpy as np
 import torch
+from torch.cuda.amp import autocast
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 from transformers import AdamW
 from torch.optim import Adam
 from tensorize import CorefDataProcessor
@@ -93,19 +95,32 @@ class Runner:
         max_f1 = 0
         start_time = time.time()
         model.zero_grad()
-        for epo in range(epochs):
+        scaler = torch.cuda.amp.GradScaler()
+        for epo in tqdm(range(epochs)):
             random.shuffle(examples_train)  # Shuffle training set
-            for doc_key, example in examples_train:
+            for doc_key, example in tqdm(examples_train):
                 # Forward pass
                 model.train()
                 example_gpu = [d.to(self.device) for d in example]
-                _, loss = model(*example_gpu)
+                if self.amp:
+                    with autocast():
+                        _, loss = model(*example_gpu)
+                else:
+                    _, loss = model(*example_gpu)
 
                 # Backward; accumulate gradients and clip by grad norm
                 if grad_accum > 1:
                     loss /= grad_accum
-                loss.backward()
+
+                if self.amp:
+                    scaler.scale(loss).backward()
+                else:
+                    loss.backward()
+
                 if conf['max_grad_norm']:
+                    if self.amp:
+                        for optimizer in optimizers:
+                            scaler.unscale_(optimizer)
                     torch.nn.utils.clip_grad_norm_(bert_param, conf['max_grad_norm'])
                     torch.nn.utils.clip_grad_norm_(task_param, conf['max_grad_norm'])
                 loss_during_accum.append(loss.item())
@@ -113,7 +128,13 @@ class Runner:
                 # Update
                 if len(loss_during_accum) % grad_accum == 0:
                     for optimizer in optimizers:
-                        optimizer.step()
+                        if self.amp:
+                            scaler.step(optimizer)
+                        else:
+                            optimizer.step()
+                    scaler.update()
+                    for optimizer in optimizers:
+                        optimizer.zero_grad()
                     model.zero_grad()
                     for scheduler in schedulers:
                         scheduler.step()
