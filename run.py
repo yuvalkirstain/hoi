@@ -25,7 +25,7 @@ logger = logging.getLogger()
 
 
 class Runner:
-    def __init__(self, config_name, gpu_id=0, seed=None):
+    def __init__(self, config_name, gpu_id=0, seed=42):
         self.name = config_name
         self.name_suffix = datetime.now().strftime('%b%d_%H-%M-%S')
         self.gpu_id = gpu_id
