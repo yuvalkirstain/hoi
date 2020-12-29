@@ -4,7 +4,7 @@ import os
 import re
 import collections
 import json
-from transformers import BertTokenizer
+from transformers import BertTokenizer, AutoTokenizer
 import conll
 import util
 
@@ -189,15 +189,26 @@ def get_document(doc_key, doc_lines, language, seg_len, tokenizer):
     word_idx = -1
 
     # Build up documents
+    last_speaker = None
     for line in doc_lines:
         row = line.split()  # Columns for each token
         if len(row) == 0:
             document_state.sentence_end[-1] = True
         else:
             assert len(row) >= 12
+            speaker = row[9]
+            if speaker != last_speaker:
+                speaker_subtokens = tokenizer.tokenize(f"* {speaker} *")
+                len_speaker_subtokens = len(speaker_subtokens)
+                document_state.subtokens += speaker_subtokens
+                document_state.info += [None] * len_speaker_subtokens
+                document_state.sentence_end += [False] * len_speaker_subtokens
+                document_state.subtoken_map += [-1] * len_speaker_subtokens
+                document_state.token_end += [False] * len_speaker_subtokens
+                last_speaker = speaker
             word_idx += 1
             word = normalize_word(row[3], language)
-            subtokens = tokenizer.tokenize(word)
+            subtokens = tokenizer.tokenize(" " + word)
             document_state.tokens.append(word)
             document_state.token_end += [False] * (len(subtokens) - 1) + [True]
             for idx, subtoken in enumerate(subtokens):
@@ -216,7 +227,7 @@ def get_document(doc_key, doc_lines, language, seg_len, tokenizer):
 
 def minimize_partition(partition, extension, args, tokenizer):
     input_path = os.path.join(args.input_dir, f'{partition}.{args.language}.{extension}')
-    output_path = os.path.join(args.output_dir, f'{partition}.{args.language}.{args.seg_len}.jsonlines')
+    output_path = os.path.join(args.output_dir, f'{partition}.{args.language}.{args.seg_len}.{os.path.basename(args.tokenizer_name)}.jsonlines')
     doc_count = 0
     logger.info(f'Minimizing {input_path}...')
 
@@ -246,7 +257,7 @@ def minimize_partition(partition, extension, args, tokenizer):
 
 
 def minimize_language(args):
-    tokenizer = BertTokenizer.from_pretrained(args.tokenizer_name)
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name)
 
     minimize_partition('dev', 'v4_gold_conll', args, tokenizer)
     minimize_partition('test', 'v4_gold_conll', args, tokenizer)

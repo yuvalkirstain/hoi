@@ -1,7 +1,7 @@
 import util
 import numpy as np
 import random
-from transformers import BertTokenizer
+from transformers import AutoTokenizer
 import os
 from os.path import join
 import json
@@ -20,6 +20,8 @@ class CorefDataProcessor:
         self.max_seg_len = config['max_segment_len']
         self.max_training_seg = config['max_training_sentences']
         self.data_dir = config['data_dir']
+        self.tokenizer_name = config['bert_tokenizer_name']
+        self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
 
         # Get tensorized samples
         cache_path = self.get_cache_path()
@@ -27,18 +29,19 @@ class CorefDataProcessor:
             # Load cached tensors if exists
             with open(cache_path, 'rb') as f:
                 self.tensor_samples, self.stored_info = pickle.load(f)
-                logger.info('Loaded tensorized examples from cache')
+                logger.info(f'Loaded tensorized examples from cache in {os.path.realpath(cache_path)}')
         else:
             # Generate tensorized samples
             self.tensor_samples = {}
             tensorizer = Tensorizer(self.config)
+            path_suffix = f'{language}.{self.max_seg_len}.{os.path.basename(self.tokenizer_name)}.jsonlines'
             paths = {
-                'trn': join(self.data_dir, f'train.{language}.{self.max_seg_len}.jsonlines'),
-                'dev': join(self.data_dir, f'dev.{language}.{self.max_seg_len}.jsonlines'),
-                'tst': join(self.data_dir, f'test.{language}.{self.max_seg_len}.jsonlines')
+                'trn': join(self.data_dir, f'train.{path_suffix}'),
+                'dev': join(self.data_dir, f'dev.{path_suffix}'),
+                'tst': join(self.data_dir, f'test.{path_suffix}')
             }
             for split, path in paths.items():
-                logger.info('Tensorizing examples from %s; results will be cached)' % path)
+                logger.info(f'Tensorizing examples from {path}; results will be cached in {os.path.realpath(cache_path)})')
                 is_training = (split == 'trn')
                 with open(path, 'r') as f:
                     samples = [json.loads(line) for line in f.readlines()]
@@ -73,14 +76,14 @@ class CorefDataProcessor:
         return self.stored_info
 
     def get_cache_path(self):
-        cache_path = join(self.data_dir, f'cached.tensors.{self.language}.{self.max_seg_len}.{self.max_training_seg}.bin')
+        cache_path = join(self.data_dir, f'cached.tensors.{self.language}.{self.max_seg_len}.{self.max_training_seg}.{os.path.basename(self.tokenizer_name)}.bin')
         return cache_path
 
 
 class Tensorizer:
     def __init__(self, config):
         self.config = config
-        self.tokenizer = BertTokenizer.from_pretrained(config['bert_tokenizer_name'])
+        self.tokenizer = AutoTokenizer.from_pretrained(config['bert_tokenizer_name'])
 
         # Will be used in evaluation
         self.stored_info = {}
@@ -140,7 +143,7 @@ class Tensorizer:
             sent_input_mask = [1] * len(sent_input_ids)
             sent_speaker_ids = [speaker_dict[speaker] for speaker in sent_speakers]
             while len(sent_input_ids) < max_sentence_len:
-                sent_input_ids.append(0)
+                sent_input_ids.append(self.tokenizer.pad_token_id)
                 sent_input_mask.append(0)
                 sent_speaker_ids.append(0)
             input_ids.append(sent_input_ids)

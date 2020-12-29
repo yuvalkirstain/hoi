@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from transformers import BertModel
+from transformers import AutoModel
 import util
 import logging
 from collections import Iterable
@@ -30,7 +30,7 @@ class CorefModel(nn.Module):
 
         # Model
         self.dropout = nn.Dropout(p=config['dropout_rate'])
-        self.bert = BertModel.from_pretrained(config['bert_pretrained_name_or_path'])
+        self.bert = AutoModel.from_pretrained(config['bert_pretrained_name_or_path'])
 
         self.bert_emb_size = self.bert.config.hidden_size
         self.span_emb_size = self.bert_emb_size * 3
@@ -322,7 +322,7 @@ class CorefModel(nn.Module):
             if self.update_steps % 20 == 0:
                 logger.info('---------debug step: %d---------' % self.update_steps)
                 # logger.info('candidates: %d; antecedents: %d' % (num_candidates, max_top_antecedents))
-                logger.info('spans/gold: %d/%d; ratio: %.2f' % (num_top_spans, (top_span_cluster_ids > 0).sum(), (top_span_cluster_ids > 0).sum()/num_top_spans))
+                # logger.info('spans/gold: %d/%d; ratio: %.2f' % (num_top_spans, (top_span_cluster_ids > 0).sum(), (top_span_cluster_ids > 0).sum()/num_top_spans))
                 if conf['mention_loss_coef']:
                     logger.info('mention loss: %.4f' % loss_mention)
                 if conf['loss_type'] == 'marginalized':

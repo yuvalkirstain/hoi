@@ -1,8 +1,9 @@
 import logging
+import os
 import random
 import numpy as np
 import torch
-from torch.cuda.amp import autocast
+from torch.cuda.amp import autocast, GradScaler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from transformers import AdamW
@@ -27,7 +28,7 @@ logger = logging.getLogger()
 class Runner:
     def __init__(self, config_name, gpu_id=0, seed=42):
         self.name = config_name
-        self.name_suffix = datetime.now().strftime('%b%d_%H-%M-%S')
+        self.name_suffix = config_name
         self.gpu_id = gpu_id
         self.seed = seed
 
@@ -37,6 +38,7 @@ class Runner:
 
         # Set up logger
         log_path = join(self.config['log_dir'], 'log_' + self.name_suffix + '.txt')
+        assert not os.path.exists(log_path) or "debug" in log_path
         logger.addHandler(logging.FileHandler(log_path, 'a'))
         logger.info('Log file path: %s' % log_path)
 
@@ -62,6 +64,7 @@ class Runner:
         epochs, grad_accum = conf['num_epochs'], conf['gradient_accumulation_steps']
 
         model.to(self.device)
+        logger.info(datetime.now().strftime('%b%d_%H-%M-%S'))
         logger.info('Model parameters:')
         for name, param in model.named_parameters():
             logger.info('%s: %s' % (name, tuple(param.shape)))
@@ -307,7 +310,8 @@ class Runner:
 
 
 if __name__ == '__main__':
-    config_name, gpu_id = sys.argv[1], int(sys.argv[2])
+    config_name = sys.argv[1]
+    gpu_id = int(sys.argv[2]) if len(sys.argv) > 2 else None
     runner = Runner(config_name, gpu_id)
     model = runner.initialize_model()
 
