@@ -156,7 +156,7 @@ def split_into_segments(document_state: DocumentState, max_seg_len, constraints1
         Input document_state: tokens, subtokens, token_end, sentence_end, utterance_end, subtoken_map, info
     """
     curr_idx = 0  # Index for subtokens
-    prev_token_idx = 0
+    prev_token_idx = -1  # TODO it was 0. shouldn't it be -1?
     while curr_idx < len(document_state.subtokens):
         # Try to split at a sentence end point
         end_idx = min(curr_idx + max_seg_len - 1 - 2, len(document_state.subtokens) - 1)  # Inclusive
