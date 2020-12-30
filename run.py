@@ -214,7 +214,7 @@ class Runner:
         metrics = {'Eval_Avg_Precision': p * 100, 'Eval_Avg_Recall': r * 100, 'Eval_Avg_F1': f * 100}
         for name, score in metrics.items():
             logger.info('%s: %.2f' % (name, score))
-            neptune.log_metric("name", x=step, y=score)
+            neptune.log_metric(name, x=step, y=score)
             if tb_writer:
                 tb_writer.add_scalar(name, score, step)
 
