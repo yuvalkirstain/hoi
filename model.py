@@ -69,7 +69,7 @@ class CorefModel(nn.Module):
         self.cluster_score_ffnn = self.make_ffnn(3 * self.span_emb_size + config['feature_emb_size'], [config['cluster_ffnn_size']] * config['ffnn_depth'], output_size=1) if config['higher_order'] == 'cluster_merging' else None
 
         self.update_steps = 0  # Internal use for debug
-        self.debug = True
+        self.debug = False
 
     def make_embedding(self, dict_size, std=0.02):
         emb = nn.Embedding(dict_size, self.config['feature_emb_size'])
