@@ -30,7 +30,11 @@ class CorefModel(nn.Module):
 
         # Model
         self.dropout = nn.Dropout(p=config['dropout_rate'])
-        self.bert = AutoModel.from_pretrained(config['bert_pretrained_name_or_path'])
+
+        if config['hidden_dropout_prob'] >= 0:
+            self.bert = AutoModel.from_pretrained(config['bert_pretrained_name_or_path'], hidden_dropout_prob=config['hidden_dropout_prob'])
+        else:
+            self.bert = AutoModel.from_pretrained(config['bert_pretrained_name_or_path'])
 
         self.bert_emb_size = self.bert.config.hidden_size
         self.span_emb_size = self.bert_emb_size * 3
