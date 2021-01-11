@@ -28,7 +28,7 @@ logger = logging.getLogger()
 
 
 class Runner:
-    def __init__(self, config_name, gpu_id=0, seed=42):
+    def __init__(self, config_name, gpu_id=0, seed=42, eval=False):
         self.name = config_name
         self.name_suffix = config_name
         self.gpu_id = gpu_id
@@ -39,8 +39,8 @@ class Runner:
         self.amp = self.config['amp']
 
         # Set up logger
-        log_path = join(self.config['log_dir'], 'log_' + self.name_suffix + '.txt')
-        assert not os.path.exists(log_path) or "debug" in log_path
+        log_path = join(self.config['log_dir'], 'log_' + self.name_suffix + ('_eval' if eval else '')  + '.txt')
+        assert not os.path.exists(log_path) or "debug" in log_path, log_path
         logger.addHandler(logging.FileHandler(log_path, 'a'))
         logger.info('Log file path: %s' % log_path)
 
@@ -214,11 +214,15 @@ class Runner:
         metrics = {'Eval_Avg_Precision': p * 100, 'Eval_Avg_Recall': r * 100, 'Eval_Avg_F1': f * 100}
         for name, score in metrics.items():
             logger.info('%s: %.2f' % (name, score))
-            neptune.log_metric(name, x=step, y=score)
+            #neptune.log_metric(name, x=step, y=score)
             if tb_writer:
                 tb_writer.add_scalar(name, score, step)
-
+        
         if official:
+            import json
+            with open("hoi_preds.jsonl", "w") as f:
+                f.write(json.dumps(doc_to_prediction) + '\n')
+                f.write(json.dumps(stored_info['subtoken_maps']) + '\n')
             conll_results = conll.evaluate_conll(conll_path, doc_to_prediction, stored_info['subtoken_maps'])
             official_f1 = sum(results["f"] for results in conll_results.values()) / len(conll_results)
             logger.info('Official avg F1: %.4f' % official_f1)
@@ -309,8 +313,8 @@ class Runner:
         # return LambdaLR(optimizer, [lr_lambda_bert, lr_lambda_bert, lr_lambda_task, lr_lambda_task])
 
     def save_model_checkpoint(self, model, step):
-        if step < 30000:
-            return  # Debug
+        #if step < 30000:
+        #    return  # Debug
         path_ckpt = join(self.config['log_dir'], f'model_{self.name_suffix}_{step}.bin')
         torch.save(model.state_dict(), path_ckpt)
         logger.info('Saved model to %s' % path_ckpt)
