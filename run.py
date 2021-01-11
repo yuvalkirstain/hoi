@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import random
@@ -192,23 +193,27 @@ class Runner:
         tb_writer.close()
         return loss_history
 
-    def evaluate(self, model, tensor_examples, stored_info, step, official=False, conll_path=None, tb_writer=None):
+    def evaluate(self, model, tensor_examples, stored_info, step, official=True, conll_path="debug/handmade.conll", tb_writer=None):
         logger.info('Step %d: evaluating on %d samples...' % (step, len(tensor_examples)))
         model.to(self.device)
         evaluator = CorefEvaluator()
         doc_to_prediction = {}
 
         model.eval()
+        all_usage_data = []
         for i, (doc_key, tensor_example) in enumerate(tensor_examples):
             gold_clusters = stored_info['gold'][doc_key]
             tensor_example = tensor_example[:7]  # Strip out gold
             example_gpu = [d.to(self.device) for d in tensor_example]
             with torch.no_grad():
-                _, _, _, span_starts, span_ends, antecedent_idx, antecedent_scores = model(*example_gpu)
+                _, _, _, span_starts, span_ends, antecedent_idx, antecedent_scores, usage_data = model(*example_gpu)
+                all_usage_data.append(usage_data)
             span_starts, span_ends = span_starts.tolist(), span_ends.tolist()
             antecedent_idx, antecedent_scores = antecedent_idx.tolist(), antecedent_scores.tolist()
             predicted_clusters = model.update_evaluator(span_starts, span_ends, antecedent_idx, antecedent_scores, gold_clusters, evaluator)
             doc_to_prediction[doc_key] = predicted_clusters
+
+        json.dump(all_usage_data, open("hoi_usage_data.json", "w"))
 
         p, r, f = evaluator.get_prf()
         metrics = {'Eval_Avg_Precision': p * 100, 'Eval_Avg_Recall': r * 100, 'Eval_Avg_F1': f * 100}

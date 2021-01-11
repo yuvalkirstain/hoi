@@ -142,10 +142,10 @@ class Tensorizer:
             sent_input_ids = self.tokenizer.convert_tokens_to_ids(sent_tokens)
             sent_input_mask = [1] * len(sent_input_ids)
             sent_speaker_ids = [speaker_dict[speaker] for speaker in sent_speakers]
-            while len(sent_input_ids) < max_sentence_len:
-                sent_input_ids.append(self.tokenizer.pad_token_id)
-                sent_input_mask.append(0)
-                sent_speaker_ids.append(0)
+            # while len(sent_input_ids) < max_sentence_len:
+            #     sent_input_ids.append(self.tokenizer.pad_token_id)
+            #     sent_input_mask.append(0)
+            #     sent_speaker_ids.append(0)
             input_ids.append(sent_input_ids)
             input_mask.append(sent_input_mask)
             speaker_ids.append(sent_speaker_ids)

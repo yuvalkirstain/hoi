@@ -1,3 +1,5 @@
+import time
+import GPUtil
 import torch
 import torch.nn as nn
 from transformers import AutoModel
@@ -114,7 +116,7 @@ class CorefModel(nn.Module):
         """ Model and input are already on the device """
         device = self.device
         conf = self.config
-
+        start_time = time.monotonic()
         do_loss = False
         if gold_mention_cluster_map is not None:
             assert gold_starts is not None
@@ -123,6 +125,7 @@ class CorefModel(nn.Module):
 
         # Get token emb
         mention_doc, _ = self.bert(input_ids, attention_mask=input_mask, return_dict=False)  # [num seg, num max tokens, emb size]
+        longformer_time = time.monotonic()
         input_mask = input_mask.to(torch.bool)
         mention_doc = mention_doc[input_mask]
         speaker_ids = speaker_ids[input_mask]
@@ -137,14 +140,6 @@ class CorefModel(nn.Module):
         candidate_mask = (candidate_ends < num_words) & (candidate_start_sent_idx == candidate_end_sent_idx)
         candidate_starts, candidate_ends = candidate_starts[candidate_mask], candidate_ends[candidate_mask]  # [num valid candidates]
         num_candidates = candidate_starts.shape[0]
-
-        # Get candidate labels
-        if do_loss:
-            same_start = (torch.unsqueeze(gold_starts, 1) == torch.unsqueeze(candidate_starts, 0))
-            same_end = (torch.unsqueeze(gold_ends, 1) == torch.unsqueeze(candidate_ends, 0))
-            same_span = (same_start & same_end).to(torch.long)
-            candidate_labels = torch.matmul(torch.unsqueeze(gold_mention_cluster_map, 0).to(torch.float), same_span.to(torch.float))
-            candidate_labels = torch.squeeze(candidate_labels.to(torch.long), 0)  # [num candidates]; non-gold span has label 0
 
         # Get span embedding
         span_start_emb, span_end_emb = mention_doc[candidate_starts], mention_doc[candidate_ends]
@@ -183,7 +178,6 @@ class CorefModel(nn.Module):
         selected_idx = torch.tensor(selected_idx_cpu, device=device)
         top_span_starts, top_span_ends = candidate_starts[selected_idx], candidate_ends[selected_idx]
         top_span_emb = candidate_span_emb[selected_idx]
-        top_span_cluster_ids = candidate_labels[selected_idx] if do_loss else None
         top_span_mention_scores = candidate_mention_scores[selected_idx]
 
         # Coarse pruning on each mention's antecedents
@@ -266,11 +260,23 @@ class CorefModel(nn.Module):
         else:
             top_pairwise_scores = top_pairwise_fast_scores  # [num top spans, max top antecedents]
 
+        final_time = time.monotonic()
+        usage_data = {"total_time": final_time - start_time, "head_time": final_time - longformer_time, "seq_len": input_ids.size(1) * input_ids.size(0)}
+        gpu_usage = get_gpus_usage()
+        usage_data.update(gpu_usage)
         if not do_loss:
             if conf['fine_grained'] and conf['higher_order'] == 'cluster_merging':
                 top_pairwise_scores += cluster_merging_scores
             top_antecedent_scores = torch.cat([torch.zeros(num_top_spans, 1, device=device), top_pairwise_scores], dim=1)  # [num top spans, max top antecedents + 1]
-            return candidate_starts, candidate_ends, candidate_mention_scores, top_span_starts, top_span_ends, top_antecedent_idx, top_antecedent_scores
+            return candidate_starts, candidate_ends, candidate_mention_scores, top_span_starts, top_span_ends, top_antecedent_idx, top_antecedent_scores, usage_data
+
+        # Get candidate labels
+        same_start = (torch.unsqueeze(gold_starts, 1) == torch.unsqueeze(candidate_starts, 0))
+        same_end = (torch.unsqueeze(gold_ends, 1) == torch.unsqueeze(candidate_ends, 0))
+        same_span = (same_start & same_end).to(torch.long)
+        candidate_labels = torch.matmul(torch.unsqueeze(gold_mention_cluster_map, 0).to(torch.float), same_span.to(torch.float))
+        candidate_labels = torch.squeeze(candidate_labels.to(torch.long), 0)  # [num candidates]; non-gold span has label 0
+        top_span_cluster_ids = candidate_labels[selected_idx]
 
         # Get gold labels
         top_antecedent_cluster_ids = top_span_cluster_ids[top_antecedent_idx]
@@ -416,3 +422,7 @@ class CorefModel(nn.Module):
         mention_to_gold = {m: cluster for cluster in gold_clusters for m in cluster}
         evaluator.update(predicted_clusters, gold_clusters, mention_to_predicted, mention_to_gold)
         return predicted_clusters
+
+def get_gpus_usage():
+    gpus = GPUtil.getGPUs()
+    return {gpu.id: gpu.memoryUsed for gpu in gpus}
