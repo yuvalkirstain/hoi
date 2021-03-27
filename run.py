@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import random
-
+import json
 import neptune
 import numpy as np
 import torch
@@ -208,12 +208,13 @@ class Runner:
             with torch.no_grad():
                 _, _, _, span_starts, span_ends, antecedent_idx, antecedent_scores, usage_data = model(*example_gpu)
                 all_usage_data.append(usage_data)
+                logger.info(usage_data)
             span_starts, span_ends = span_starts.tolist(), span_ends.tolist()
             antecedent_idx, antecedent_scores = antecedent_idx.tolist(), antecedent_scores.tolist()
             predicted_clusters = model.update_evaluator(span_starts, span_ends, antecedent_idx, antecedent_scores, gold_clusters, evaluator)
             doc_to_prediction[doc_key] = predicted_clusters
 
-        json.dump(all_usage_data, open("hoi_usage_data.json", "w"))
+        json.dump(all_usage_data, open(f"{self.name}_hoi_usage_data.json", "w"))
 
         p, r, f = evaluator.get_prf()
         metrics = {'Eval_Avg_Precision': p * 100, 'Eval_Avg_Recall': r * 100, 'Eval_Avg_F1': f * 100}
@@ -224,8 +225,7 @@ class Runner:
                 tb_writer.add_scalar(name, score, step)
         
         if official:
-            import json
-            with open("hoi_preds.jsonl", "w") as f:
+            with open(os.path.join(self.config['log_dir'], "hoi_preds.jsonl"), "w") as f:
                 f.write(json.dumps(doc_to_prediction) + '\n')
                 f.write(json.dumps(stored_info['subtoken_maps']) + '\n')
             conll_results = conll.evaluate_conll(conll_path, doc_to_prediction, stored_info['subtoken_maps'])

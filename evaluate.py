@@ -3,15 +3,15 @@ import sys
 
 
 def evaluate(config_name, gpu_id, saved_suffix):
-    runner = Runner(config_name, gpu_id)
+    runner = Runner(config_name, gpu_id, eval=True)
     model = runner.initialize_model(saved_suffix)
 
     examples_train, examples_dev, examples_test = runner.data.get_tensor_examples()
     stored_info = runner.data.get_stored_info()
 
-    # runner.evaluate(model, examples_dev, stored_info, 0, official=True, conll_path=runner.config['conll_eval_path'])  # Eval dev
+    runner.evaluate(model, examples_dev, stored_info, 0, official=True, conll_path=runner.config['conll_eval_path'])  # Eval dev
     # print('=================================')
-    runner.evaluate(model, examples_test, stored_info, 0, official=True, conll_path=runner.config['conll_test_path'])  # Eval test
+    # runner.evaluate(model, examples_test, stored_info, 0, official=True, conll_path=runner.config['conll_test_path'])  # Eval test
 
 
 if __name__ == '__main__':
